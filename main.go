@@ -15,6 +15,38 @@ type FileConfig struct {
 	contents []string
 }
 
+type Cursor struct {
+	x int
+	y int
+}
+
+type Mode int
+
+const (
+	Normal Mode = iota
+	Insert
+	Visual
+)
+
+func (m Mode) String() string {
+	switch m {
+	case Normal:
+		return "Normal"
+	case Insert:
+		return "Insert"
+	case Visual:
+		return "Visual"
+	default:
+		return "non-match"
+	}
+}
+
+type View struct {
+	cursor Cursor
+	mode   Mode
+	window *gc.Window
+}
+
 func Openfile(filename string) (*FileConfig, error) {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
@@ -37,6 +69,38 @@ func Openfile(filename string) (*FileConfig, error) {
 	}, nil
 }
 
+func (v *View) Init(contents []string) error {
+	gc.Raw(true) // raw mode
+	gc.Echo(false)
+	if err := gc.HalfDelay(20); err != nil {
+		return err
+	}
+	gc.MouseMask(gc.M_ALL, nil)
+	v.window.Keypad(true)
+	v.window.ScrollOk(true)
+	line, _ := v.window.MaxYX()
+	if line > len(contents) {
+		line = len(contents)
+	}
+
+	for i := 0; i < line; i++ {
+		v.window.Print(contents[i])
+		//		v.window.Refresh()
+	}
+	v.window.Move(0, 0)
+	v.window.Refresh()
+
+	return nil
+}
+
+func NewView(w *gc.Window) *View {
+	return &View{
+		cursor: Cursor{x: 0, y: 0},
+		mode:   Normal,
+		window: w,
+	}
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Printf("Usage: command <filename>\n")
@@ -47,6 +111,7 @@ func main() {
 	if err != nil {
 		log.Fatal("init", err)
 	}
+	gc.StartColor()
 	defer gc.End() //endwin
 
 	fc, err := Openfile(os.Args[1])
@@ -54,8 +119,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	for _, v := range fc.contents {
-		fmt.Print(v)
+	view := NewView(stdscr)
+	if err := view.Init(fc.contents); err != nil {
+		log.Fatal(err)
 	}
 
 	for {
