@@ -78,7 +78,7 @@ func (v *View) Init(contents []string) error {
 	gc.MouseMask(gc.M_ALL, nil)
 	v.window.Keypad(true)
 	v.window.ScrollOk(true)
-	line, _ := v.window.MaxYX()
+	line, _ := v.window.MaxYX() // ncurses_getmaxyx
 	if line > len(contents) {
 		line = len(contents)
 	}
@@ -111,8 +111,8 @@ func main() {
 	if err != nil {
 		log.Fatal("init", err)
 	}
-	gc.StartColor()
-	defer gc.End() //endwin
+	gc.StartColor() // start_color
+	defer gc.End()  // endwin
 
 	fc, err := Openfile(os.Args[1])
 	if err != nil {
