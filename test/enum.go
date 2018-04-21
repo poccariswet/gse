@@ -23,5 +23,9 @@ func (m Mode) String() string {
 }
 
 func main() {
-	fmt.Println(Nomal)
+	var mode Mode
+	mode = Nomal
+	fmt.Println(mode)
+	mode = Insert
+	fmt.Println(mode)
 }
