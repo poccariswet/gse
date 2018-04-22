@@ -149,6 +149,8 @@ func main() {
 			if err := view.NormalCommand(ch); err != nil {
 				log.Fatal(err)
 			}
+		case Insert:
+		case Visual:
 		default:
 			return
 		}
