@@ -20,8 +20,6 @@ type Cursor struct {
 	y     int
 	max_x int
 	max_y int
-	min_x int
-	min_y int
 }
 
 type Mode int
