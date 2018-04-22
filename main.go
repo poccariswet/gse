@@ -16,8 +16,12 @@ type FileConfig struct {
 }
 
 type Cursor struct {
-	x int
-	y int
+	x     int
+	y     int
+	max_x int
+	max_y int
+	min_x int
+	min_y int
 }
 
 type Mode int
@@ -78,16 +82,19 @@ func (v *View) Init(contents []string) error {
 	gc.MouseMask(gc.M_ALL, nil)
 	v.window.Keypad(true)
 	v.window.ScrollOk(true)
-	line, _ := v.window.MaxYX() // ncurses_getmaxyx
+	line, x := v.window.MaxYX() // ncurses_getmaxyx
 	if line > len(contents) {
 		line = len(contents)
 	}
+	v.cursor.max_y = line - 1
+	v.cursor.max_x = x - 1
 
 	for i := 0; i < line; i++ {
 		v.window.Print(contents[i])
-		//		v.window.Refresh()
+		v.window.Refresh()
 	}
 	v.window.Move(0, 0) // init locate of cursor
+	v.window.Resize(line, x)
 	v.window.Refresh()
 
 	return nil
@@ -96,13 +103,21 @@ func (v *View) Init(contents []string) error {
 func (v *View) NormalCommand(ch gc.Key) error {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
-		v.cursor.x--
+		if v.cursor.x > 0 {
+			v.cursor.x--
+		}
 	case gc.KEY_RIGHT, 'l':
-		v.cursor.x++
+		if v.cursor.x < v.cursor.max_x {
+			v.cursor.x++
+		}
 	case gc.KEY_UP, 'k':
-		v.cursor.y--
+		if v.cursor.y > 0 {
+			v.cursor.y--
+		}
 	case gc.KEY_DOWN, 'j':
-		v.cursor.y++
+		if v.cursor.y < v.cursor.max_y {
+			v.cursor.y++
+		}
 	}
 	v.window.Move(v.cursor.y, v.cursor.x)
 	return nil
