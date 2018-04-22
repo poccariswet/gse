@@ -47,7 +47,7 @@ type View struct {
 	window *gc.Window
 }
 
-func Openfile(filename string) (*FileConfig, error) {
+func OpenFile(filename string) (*FileConfig, error) {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
@@ -87,9 +87,24 @@ func (v *View) Init(contents []string) error {
 		v.window.Print(contents[i])
 		//		v.window.Refresh()
 	}
-	v.window.Move(0, 0)
+	v.window.Move(0, 0) // init locate of cursor
 	v.window.Refresh()
 
+	return nil
+}
+
+func (v *View) NormalCommand(ch gc.Key) error {
+	switch ch {
+	case gc.KEY_LEFT, 'h':
+		v.cursor.x--
+	case gc.KEY_RIGHT, 'l':
+		v.cursor.x++
+	case gc.KEY_UP, 'k':
+		v.cursor.y--
+	case gc.KEY_DOWN, 'j':
+		v.cursor.y++
+	}
+	v.window.Move(v.cursor.y, v.cursor.x)
 	return nil
 }
 
@@ -114,7 +129,7 @@ func main() {
 	gc.StartColor() // start_color
 	defer gc.End()  // endwin
 
-	fc, err := Openfile(os.Args[1])
+	fc, err := OpenFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -125,9 +140,17 @@ func main() {
 	}
 
 	for {
-		ch := stdscr.GetChar()
+		ch := view.window.GetChar()
 		if ch == 'q' {
 			break
+		}
+		switch view.mode {
+		case Normal:
+			if err := view.NormalCommand(ch); err != nil {
+				log.Fatal(err)
+			}
+		default:
+			return
 		}
 	}
 }
