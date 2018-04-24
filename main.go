@@ -91,6 +91,10 @@ func (v *View) Init(contents []string) error {
 		v.window.Print(contents[i])
 		v.window.Refresh()
 	}
+	//	for _, val := range contents {
+	//		v.window.Print(val)
+	//		v.window.Refresh()
+	//	}
 	v.window.Move(0, 0) // init locate of cursor
 	v.window.Resize(line, x)
 	v.window.Refresh()
