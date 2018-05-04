@@ -7,10 +7,12 @@ import (
 	"log"
 	"os"
 
+	homedir "github.com/mitchellh/go-homedir"
 	gc "github.com/rthornton128/goncurses"
 )
 
-type FileConfig struct {
+type FileInfo struct {
+	namepath string
 	file     *os.File
 	contents []string
 }
@@ -44,13 +46,20 @@ func (m Mode) String() string {
 }
 
 type View struct {
-	cursor Cursor
-	mode   Mode
-	window *gc.Window
+	cursor      Cursor
+	mode        Mode
+	main_window *gc.Window
+	//	colm_window *gc.Window
+	//	mode_window *gc.Window
 }
 
-func OpenFile(filename string) (*FileConfig, error) {
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
+func OpenFile(filename string) (*FileInfo, error) {
+	name, err := homedir.Expand(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -65,12 +74,18 @@ func OpenFile(filename string) (*FileConfig, error) {
 		return nil, errors.New(fmt.Sprintf("scanner err:", err))
 	}
 
-	return &FileConfig{
+	return &FileInfo{
+		namepath: name,
 		file:     file,
 		contents: str,
 	}, nil
 }
 
+func (f *FileInfo) GetLine() int {
+	return len(f.contents)
+}
+
+// windowの設定、ファイルの表示をする
 func (v *View) Init(contents []string) error {
 	gc.Raw(true) // raw mode
 	gc.Echo(false)
@@ -78,9 +93,9 @@ func (v *View) Init(contents []string) error {
 		return err
 	}
 	gc.MouseMask(gc.M_ALL, nil)
-	v.window.Keypad(true)
-	v.window.ScrollOk(true)
-	line, x := v.window.MaxYX() // ncurses_getmaxyx
+	v.main_window.Keypad(true)
+	v.main_window.ScrollOk(true)
+	line, x := v.main_window.MaxYX() // ncurses_getmaxyx
 	if line > len(contents) {
 		line = len(contents)
 	}
@@ -88,20 +103,17 @@ func (v *View) Init(contents []string) error {
 	v.cursor.max_x = x - 1
 
 	for i := 0; i < line; i++ {
-		v.window.Print(contents[i])
-		v.window.Refresh()
+		v.main_window.Print(contents[i])
+		v.main_window.Refresh()
 	}
-	//	for _, val := range contents {
-	//		v.window.Print(val)
-	//		v.window.Refresh()
-	//	}
-	v.window.Move(0, 0) // init locate of cursor
-	v.window.Resize(line, x)
-	v.window.Refresh()
+	v.main_window.Move(0, 0) // init locate of cursor
+	v.main_window.Resize(line, x)
+	v.main_window.Refresh()
 
 	return nil
 }
 
+// Normal mode時のキー操作
 func (v *View) NormalCommand(ch gc.Key) error {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
@@ -116,21 +128,40 @@ func (v *View) NormalCommand(ch gc.Key) error {
 		if v.cursor.y > 0 {
 			v.cursor.y--
 		}
-	case gc.KEY_DOWN, 'j':
+	case gc.KEY_DOWN, 'j', '\n':
 		if v.cursor.y < v.cursor.max_y {
 			v.cursor.y++
 		}
 	}
-	v.window.Move(v.cursor.y, v.cursor.x)
+	v.main_window.Move(v.cursor.y, v.cursor.x)
 	return nil
 }
 
-func NewView(w *gc.Window) *View {
-	return &View{
-		cursor: Cursor{x: 0, y: 0},
-		mode:   Normal,
-		window: w,
+// TODO サブウィンドウの追加
+func MakeWindows(f *FileInfo) (*gc.Window, error) {
+	stdscr := gc.StdScr()
+	len_str := len(fmt.Sprint("%d", f.GetLine()))
+	y, x := stdscr.MaxYX()
+
+	main_win, err := gc.NewWindow(y, x-len_str, 0, len_str)
+	if err != nil {
+		return nil, err
 	}
+
+	return main_win, nil
+}
+
+func NewView(f *FileInfo) (*View, error) {
+	m, err := MakeWindows(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return &View{
+		cursor:      Cursor{x: 0, y: 0},
+		mode:        Normal,
+		main_window: m,
+	}, nil
 }
 
 func main() {
@@ -139,29 +170,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	stdscr, err := gc.Init()
+	_, err := gc.Init()
 	if err != nil {
 		log.Fatal("init", err)
 	}
 	gc.StartColor() // start_color
 	defer gc.End()  // endwin
 
-	fc, err := OpenFile(os.Args[1])
+	f, err := OpenFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	view := NewView(stdscr)
-	if err := view.Init(fc.contents); err != nil {
+	view, err := NewView(f) //ここでサブウィンドウの作成
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := view.Init(f.contents); err != nil {
 		log.Fatal(err)
 	}
 
 	quit := make(chan struct{})
 	go func() {
 		for {
-			ch := view.window.GetChar()
+			ch := view.main_window.GetChar()
 			if ch == 'q' {
-				clese(quit)
+				close(quit)
 			}
 			switch view.mode {
 			case Normal:
