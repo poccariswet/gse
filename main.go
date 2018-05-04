@@ -7,12 +7,10 @@ import (
 	"log"
 	"os"
 
-	homedir "github.com/mitchellh/go-homedir"
 	gc "github.com/rthornton128/goncurses"
 )
 
-type FileInfo struct {
-	namepath string
+type FileConfig struct {
 	file     *os.File
 	contents []string
 }
@@ -48,16 +46,11 @@ func (m Mode) String() string {
 type View struct {
 	cursor Cursor
 	mode   Mode
-	window []*gc.Window
+	window *gc.Window
 }
 
-func OpenFile(filename string) (*FileInfo, error) {
-	name, err := homedir.Expand(filename)
-	if err != nil {
-		return nil, err
-	}
-
-	file, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, 0755)
+func OpenFile(filename string) (*FileConfig, error) {
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -72,18 +65,12 @@ func OpenFile(filename string) (*FileInfo, error) {
 		return nil, errors.New(fmt.Sprintf("scanner err:", err))
 	}
 
-	return &FileInfo{
-		namepath: name,
+	return &FileConfig{
 		file:     file,
 		contents: str,
 	}, nil
 }
 
-func (f *FileInfo) GetLine() int {
-	return len(fc.contents)
-}
-
-// windowの設定、ファイルの表示をする
 func (v *View) Init(contents []string) error {
 	gc.Raw(true) // raw mode
 	gc.Echo(false)
@@ -104,6 +91,10 @@ func (v *View) Init(contents []string) error {
 		v.window.Print(contents[i])
 		v.window.Refresh()
 	}
+	//	for _, val := range contents {
+	//		v.window.Print(val)
+	//		v.window.Refresh()
+	//	}
 	v.window.Move(0, 0) // init locate of cursor
 	v.window.Resize(line, x)
 	v.window.Refresh()
@@ -111,7 +102,6 @@ func (v *View) Init(contents []string) error {
 	return nil
 }
 
-// Normal mode時のキー操作
 func (v *View) NormalCommand(ch gc.Key) error {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
@@ -126,7 +116,7 @@ func (v *View) NormalCommand(ch gc.Key) error {
 		if v.cursor.y > 0 {
 			v.cursor.y--
 		}
-	case gc.KEY_DOWN, 'j', '\n':
+	case gc.KEY_DOWN, 'j':
 		if v.cursor.y < v.cursor.max_y {
 			v.cursor.y++
 		}
@@ -139,7 +129,7 @@ func NewView(w *gc.Window) *View {
 	return &View{
 		cursor: Cursor{x: 0, y: 0},
 		mode:   Normal,
-		window: w, //window の数によっては増やす(mapでもいい？)
+		window: w,
 	}
 }
 
@@ -161,25 +151,36 @@ func main() {
 		log.Fatal(err)
 	}
 
-	view := NewView() //ここでサブウィンドウの作成
+	view := NewView(stdscr)
 	if err := view.Init(fc.contents); err != nil {
 		log.Fatal(err)
 	}
 
-	for {
-		ch := view.window.GetChar()
-		if ch == 'q' {
-			break
-		}
-		switch view.mode {
-		case Normal:
-			if err := view.NormalCommand(ch); err != nil {
-				log.Fatal(err)
+	quit := make(chan struct{})
+	go func() {
+		for {
+			ch := view.window.GetChar()
+			if ch == 'q' {
+				clese(quit)
 			}
-		case Insert:
-		case Visual:
-		default:
-			return
+			switch view.mode {
+			case Normal:
+				if err := view.NormalCommand(ch); err != nil {
+					log.Fatal(err)
+				}
+			case Insert:
+			case Visual:
+			default:
+				return
+			}
+		}
+	}()
+
+loop:
+	for {
+		select {
+		case <-quit:
+			break loop
 		}
 	}
 }
