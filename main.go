@@ -45,6 +45,14 @@ func (m Mode) String() string {
 	}
 }
 
+type WindowMode int
+
+const (
+	MainWin WindowMode = iota
+	ColmWin
+	ModeWin
+)
+
 type View struct {
 	cursor      Cursor
 	mode        Mode
@@ -138,30 +146,47 @@ func (v *View) NormalCommand(ch gc.Key) error {
 }
 
 // TODO サブウィンドウの追加
-func MakeWindows(f *FileInfo) (*gc.Window, error) {
-	stdscr := gc.StdScr()
-	len_str := len(fmt.Sprint("%d", f.GetLine()))
-	y, x := stdscr.MaxYX()
-
-	main_win, err := gc.NewWindow(y, x-len_str, 0, len_str)
+func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) error {
+	win, err := gc.NewWindow(nline, ncolm, begin_y, begin_x)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	switch wm {
+	case MainWin:
+		v.main_window = win
+		//	case ColmWin:
+		//		v.colm_window = win
+		//	case ModeWin:
+		//		v.mode_window = win
+	default:
+		return errors.New("invalid mode window")
 	}
 
-	return main_win, nil
+	return nil
 }
 
 func NewView(f *FileInfo) (*View, error) {
-	m, err := MakeWindows(f)
-	if err != nil {
+	v := &View{
+		cursor: Cursor{x: 0, y: 0},
+		mode:   Normal,
+	}
+
+	stdscr := gc.StdScr()
+	len_str := len(fmt.Sprintf("%d", f.GetLine()))
+	if len_str < 3 {
+		len_str = 3
+	}
+	y, x := stdscr.MaxYX()
+
+	if err := v.MakeWindows(MainWin, y, x-len_str, 0, len_str); err != nil {
 		return nil, err
 	}
 
-	return &View{
-		cursor:      Cursor{x: 0, y: 0},
-		mode:        Normal,
-		main_window: m,
-	}, nil
+	//	if err := v.MakeWindows(ColmWin, y, len_str, 0, 0); err != nil {
+	//		return nil, err
+	//	}
+	//
+	return v, nil
 }
 
 func main() {
