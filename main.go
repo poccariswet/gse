@@ -57,7 +57,7 @@ type View struct {
 	cursor      Cursor
 	mode        Mode
 	main_window *gc.Window
-	//	colm_window *gc.Window
+	colm_window *gc.Window
 	//	mode_window *gc.Window
 }
 
@@ -100,22 +100,30 @@ func (v *View) Init(contents []string) error {
 	if err := gc.HalfDelay(20); err != nil {
 		return err
 	}
+
 	gc.MouseMask(gc.M_ALL, nil)
 	v.main_window.Keypad(true)
 	v.main_window.ScrollOk(true)
-	line, x := v.main_window.MaxYX() // ncurses_getmaxyx
-	if line > len(contents) {
-		line = len(contents)
+	v.colm_window.ScrollOk(true)
+	y, x := v.main_window.MaxYX() // ncurses_getmaxyx
+	if y > len(contents) {
+		y = len(contents)
+	} else {
+		y -= 1
 	}
-	v.cursor.max_y = line - 1
+
+	v.cursor.max_y = y - 1
 	v.cursor.max_x = x - 1
 
-	for i := 0; i < line; i++ {
+	for i := 0; i < y; i++ {
+		v.colm_window.Printf("%3d", i+1)
+		v.colm_window.Refresh()
 		v.main_window.Print(contents[i])
 		v.main_window.Refresh()
 	}
+	v.colm_window.Refresh()
 	v.main_window.Move(0, 0) // init locate of cursor
-	v.main_window.Resize(line, x)
+	v.main_window.Resize(y, x)
 	v.main_window.Refresh()
 
 	return nil
@@ -154,8 +162,8 @@ func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) er
 	switch wm {
 	case MainWin:
 		v.main_window = win
-		//	case ColmWin:
-		//		v.colm_window = win
+	case ColmWin:
+		v.colm_window = win
 		//	case ModeWin:
 		//		v.mode_window = win
 	default:
@@ -178,14 +186,14 @@ func NewView(f *FileInfo) (*View, error) {
 	}
 	y, x := stdscr.MaxYX()
 
-	if err := v.MakeWindows(MainWin, y, x-len_str, 0, len_str); err != nil {
+	if err := v.MakeWindows(MainWin, y-1, x-len_str, 0, len_str); err != nil {
 		return nil, err
 	}
 
-	//	if err := v.MakeWindows(ColmWin, y, len_str, 0, 0); err != nil {
-	//		return nil, err
-	//	}
-	//
+	if err := v.MakeWindows(ColmWin, y-1, len_str, 0, 0); err != nil {
+		return nil, err
+	}
+
 	return v, nil
 }
 
