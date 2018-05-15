@@ -116,7 +116,7 @@ func (v *View) Init(contents []string) error {
 	v.cursor.max_x = x - 1
 
 	for i := 0; i < y; i++ {
-		v.colm_window.Printf("%3d", i+1)
+		v.colm_window.Printf("%3d ", i+1)
 		v.colm_window.Refresh()
 		v.main_window.Print(contents[i])
 		v.main_window.Refresh()
@@ -181,8 +181,8 @@ func NewView(f *FileInfo) (*View, error) {
 
 	stdscr := gc.StdScr()
 	len_str := len(fmt.Sprintf("%d", f.GetLine()))
-	if len_str < 3 {
-		len_str = 3
+	if len_str < 4 {
+		len_str = 4
 	}
 	y, x := stdscr.MaxYX()
 
