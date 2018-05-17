@@ -58,8 +58,14 @@ type View struct {
 	mode        Mode
 	main_window *gc.Window
 	colm_window *gc.Window
-	//	mode_window *gc.Window
+	mode_window *gc.Window
+	max_x       int
+	max_y       int
 }
+
+var (
+	quit = make(chan struct{})
+)
 
 func OpenFile(filename string) (*FileInfo, error) {
 	name, err := homedir.Expand(filename)
@@ -93,6 +99,10 @@ func (f *FileInfo) GetLine() int {
 	return len(f.contents)
 }
 
+func (f *FileInfo) GetName() string {
+	return f.file.Name()
+}
+
 // windowの設定、ファイルの表示をする
 func (v *View) Init(contents []string) error {
 	gc.Raw(true) // raw mode
@@ -112,8 +122,8 @@ func (v *View) Init(contents []string) error {
 		y -= 1
 	}
 
-	v.cursor.max_y = y - 1
-	v.cursor.max_x = x - 1
+	v.max_y = y - 1
+	v.max_x = x - 1
 
 	for i := 0; i < y; i++ {
 		v.colm_window.Printf("%3d ", i+1)
@@ -121,6 +131,8 @@ func (v *View) Init(contents []string) error {
 		v.main_window.Print(contents[i])
 		v.main_window.Refresh()
 	}
+	v.mode_window.Printf("%s", v.mode)
+	v.mode_window.Refresh()
 	v.colm_window.Refresh()
 	v.main_window.Move(0, 0) // init locate of cursor
 	v.main_window.Resize(y, x)
@@ -137,7 +149,7 @@ func (v *View) NormalCommand(ch gc.Key) error {
 			v.cursor.x--
 		}
 	case gc.KEY_RIGHT, 'l':
-		if v.cursor.x < v.cursor.max_x {
+		if v.cursor.x < v.max_x {
 			v.cursor.x++
 		}
 	case gc.KEY_UP, 'k':
@@ -145,11 +157,52 @@ func (v *View) NormalCommand(ch gc.Key) error {
 			v.cursor.y--
 		}
 	case gc.KEY_DOWN, 'j', '\n':
-		if v.cursor.y < v.cursor.max_y {
+		if v.cursor.y < v.max_y {
+			v.cursor.y++
+		}
+	case 'q':
+		close(quit)
+
+	case 'i':
+		v.mode = Insert
+		v.mode_window.Printf("%s", v.mode)
+		v.mode_window.Refresh()
+	case 'v':
+		v.mode = Visual
+	}
+	v.main_window.Move(v.cursor.y, v.cursor.x)
+	return nil
+}
+
+func (v *View) InsertCommand(ch gc.Key) error {
+	switch ch {
+	case 'q':
+		v.mode = Normal
+		v.mode_window.Printf("%s", v.mode)
+		v.mode_window.Refresh()
+	case gc.KEY_LEFT:
+		if v.cursor.x > 0 {
+			v.cursor.x--
+		}
+	case gc.KEY_RIGHT:
+		if v.cursor.x < v.max_x {
+			v.cursor.x++
+		}
+	case gc.KEY_UP:
+		if v.cursor.y > 0 {
+			v.cursor.y--
+		}
+	case gc.KEY_DOWN:
+		if v.cursor.y < v.max_y {
 			v.cursor.y++
 		}
 	}
 	v.main_window.Move(v.cursor.y, v.cursor.x)
+	return nil
+}
+
+func (v *View) VisualCommand(ch gc.Key) error {
+
 	return nil
 }
 
@@ -164,8 +217,8 @@ func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) er
 		v.main_window = win
 	case ColmWin:
 		v.colm_window = win
-		//	case ModeWin:
-		//		v.mode_window = win
+	case ModeWin:
+		v.mode_window = win
 	default:
 		return errors.New("invalid mode window")
 	}
@@ -194,7 +247,16 @@ func NewView(f *FileInfo) (*View, error) {
 		return nil, err
 	}
 
+	if err := v.MakeWindows(ModeWin, 1, x, y-1, 0); err != nil {
+		return nil, err
+	}
+
 	return v, nil
+}
+
+func (v *View) Mode() {
+	v.mode_window.MovePrint(v.max_y, 0, v.mode)
+	v.mode_window.Refresh()
 }
 
 func main() {
@@ -223,20 +285,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	quit := make(chan struct{})
 	go func() {
 		for {
+			view.Mode()
 			ch := view.main_window.GetChar()
-			if ch == 'q' {
-				close(quit)
-			}
 			switch view.mode {
 			case Normal:
 				if err := view.NormalCommand(ch); err != nil {
 					log.Fatal(err)
 				}
 			case Insert:
+				if err := view.InsertCommand(ch); err != nil {
+					log.Fatal(err)
+				}
 			case Visual:
+				if err := view.VisualCommand(ch); err != nil {
+					log.Fatal(err)
+				}
 			default:
 				return
 			}
