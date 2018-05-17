@@ -12,6 +12,7 @@ import (
 )
 
 type FileInfo struct {
+	name     string
 	namepath string
 	file     *os.File
 	contents []string
@@ -56,6 +57,7 @@ const (
 type View struct {
 	cursor      Cursor
 	mode        Mode
+	file        *FileInfo
 	main_window *gc.Window
 	colm_window *gc.Window
 	mode_window *gc.Window
@@ -89,6 +91,7 @@ func OpenFile(filename string) (*FileInfo, error) {
 	}
 
 	return &FileInfo{
+		name:     file.Name(),
 		namepath: name,
 		file:     file,
 		contents: str,
@@ -104,7 +107,7 @@ func (f *FileInfo) GetName() string {
 }
 
 // windowの設定、ファイルの表示をする
-func (v *View) Init(contents []string) error {
+func (v *View) Init() error {
 	gc.Raw(true) // raw mode
 	gc.Echo(false)
 	if err := gc.HalfDelay(20); err != nil {
@@ -116,8 +119,8 @@ func (v *View) Init(contents []string) error {
 	v.main_window.ScrollOk(true)
 	v.colm_window.ScrollOk(true)
 	y, x := v.main_window.MaxYX() // ncurses_getmaxyx
-	if y > len(contents) {
-		y = len(contents)
+	if y > len(v.file.contents) {
+		y = len(v.file.contents)
 	} else {
 		y -= 1
 	}
@@ -128,7 +131,7 @@ func (v *View) Init(contents []string) error {
 	for i := 0; i < y; i++ {
 		v.colm_window.Printf("%3d ", i+1)
 		v.colm_window.Refresh()
-		v.main_window.Print(contents[i])
+		v.main_window.Print(v.file.contents[i])
 		v.main_window.Refresh()
 	}
 	v.mode_window.Printf("%s", v.mode)
@@ -228,12 +231,13 @@ func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) er
 
 func NewView(f *FileInfo) (*View, error) {
 	v := &View{
+		file:   f,
 		cursor: Cursor{x: 0, y: 0},
 		mode:   Normal,
 	}
 
 	stdscr := gc.StdScr()
-	len_str := len(fmt.Sprintf("%d", f.GetLine()))
+	len_str := len(fmt.Sprintf("%d", v.file.GetLine()))
 	if len_str < 4 {
 		len_str = 4
 	}
@@ -255,7 +259,10 @@ func NewView(f *FileInfo) (*View, error) {
 }
 
 func (v *View) Mode() {
-	v.mode_window.MovePrint(v.max_y, 0, v.mode)
+	v.mode_window.AttrOn(gc.A_BOLD)
+	v.mode_window.MovePrintf(0, 0, "%s", v.mode)
+	v.mode_window.AttrOff(gc.A_BOLD)
+	v.mode_window.MovePrintf(0, 6, ": %s\n", v.file.name)
 	v.mode_window.Refresh()
 }
 
@@ -281,7 +288,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := view.Init(f.contents); err != nil {
+	if err := view.Init(); err != nil {
 		log.Fatal(err)
 	}
 
