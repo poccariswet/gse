@@ -49,6 +49,11 @@ func (m Mode) String() string {
 type WindowMode int
 
 const (
+	ESC_KEY   gc.Key = 0x1B
+	COLON_KEY gc.Key = 0x3A
+)
+
+const (
 	MainWin WindowMode = iota
 	ColmWin
 	ModeWin
@@ -129,7 +134,9 @@ func (v *View) Init() error {
 	v.max_x = x - 1
 
 	for i := 0; i < y; i++ {
+		v.colm_window.AttrOn(gc.A_BOLD)
 		v.colm_window.Printf("%3d ", i+1)
+		v.colm_window.AttrOff(gc.A_BOLD)
 		v.colm_window.Refresh()
 		v.main_window.Print(v.file.contents[i])
 		v.main_window.Refresh()
@@ -144,8 +151,8 @@ func (v *View) Init() error {
 	return nil
 }
 
-// Normal mode時のキー操作
-func (v *View) NormalCommand(ch gc.Key) error {
+//TODO cursor移動をまとめる
+func (v *View) CursorMove(ch gc.Key) {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
 		if v.cursor.x > 0 {
@@ -163,48 +170,45 @@ func (v *View) NormalCommand(ch gc.Key) error {
 		if v.cursor.y < v.max_y {
 			v.cursor.y++
 		}
-	case 'q':
-		close(quit)
-
-	case 'i':
-		v.mode = Insert
-		v.mode_window.Printf("%s", v.mode)
-		v.mode_window.Refresh()
-	case 'v':
-		v.mode = Visual
 	}
 	v.main_window.Move(v.cursor.y, v.cursor.x)
-	return nil
 }
 
-func (v *View) InsertCommand(ch gc.Key) error {
+// Normal mode時のキー操作
+func (v *View) NormalCommand(ch gc.Key) {
 	switch ch {
+	case gc.KEY_RIGHT, 'l', gc.KEY_UP, 'k', gc.KEY_DOWN, 'j', '\n', gc.KEY_LEFT, 'h':
+		v.CursorMove(ch)
+
 	case 'q':
-		v.mode = Normal
-		v.mode_window.Printf("%s", v.mode)
-		v.mode_window.Refresh()
-	case gc.KEY_LEFT:
-		if v.cursor.x > 0 {
-			v.cursor.x--
-		}
-	case gc.KEY_RIGHT:
-		if v.cursor.x < v.max_x {
-			v.cursor.x++
-		}
-	case gc.KEY_UP:
-		if v.cursor.y > 0 {
-			v.cursor.y--
-		}
-	case gc.KEY_DOWN:
-		if v.cursor.y < v.max_y {
-			v.cursor.y++
-		}
+		close(quit)
+	case 'i':
+		v.mode = Insert
+		v.Mode()
+	case 'v':
+		v.mode = Visual
+		v.Mode()
 	}
-	v.main_window.Move(v.cursor.y, v.cursor.x)
-	return nil
+}
+
+func (v *View) InsertCommand(ch gc.Key) {
+	switch ch {
+	case ESC_KEY:
+		v.mode = Normal
+		v.Mode()
+	case gc.KEY_RIGHT, gc.KEY_UP, gc.KEY_DOWN, gc.KEY_LEFT:
+		v.CursorMove(ch)
+	}
 }
 
 func (v *View) VisualCommand(ch gc.Key) error {
+	switch ch {
+	case gc.KEY_RIGHT, 'l', gc.KEY_UP, 'k', gc.KEY_DOWN, 'j', '\n', gc.KEY_LEFT, 'h':
+		v.CursorMove(ch)
+	case ESC_KEY:
+		v.mode = Normal
+		v.Mode()
+	}
 
 	return nil
 }
@@ -251,7 +255,7 @@ func NewView(f *FileInfo) (*View, error) {
 		return nil, err
 	}
 
-	if err := v.MakeWindows(ModeWin, 1, x, y-1, 0); err != nil {
+	if err := v.MakeWindows(ModeWin, 1, x, y-2, 0); err != nil {
 		return nil, err
 	}
 
@@ -292,19 +296,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	view.Mode()
 	go func() {
 		for {
-			view.Mode()
 			ch := view.main_window.GetChar()
 			switch view.mode {
 			case Normal:
-				if err := view.NormalCommand(ch); err != nil {
-					log.Fatal(err)
-				}
+				view.NormalCommand(ch)
 			case Insert:
-				if err := view.InsertCommand(ch); err != nil {
-					log.Fatal(err)
-				}
+				view.InsertCommand(ch)
 			case Visual:
 				if err := view.VisualCommand(ch); err != nil {
 					log.Fatal(err)
