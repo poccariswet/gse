@@ -169,7 +169,6 @@ func (v *View) CursorMove(ch gc.Key) {
 		v.cursor.y++
 		v.cursor.text_y++
 	}
-	//TODO ここでmax_yを超えるかつ、max_y以上ある場合一段下の行を表示す
 	v.ScrollWin()
 	v.main_window.Move(v.cursor.y, v.cursor.x)
 }
@@ -207,6 +206,8 @@ func (v *View) ScrollWin() {
 		}
 	}
 
+	//TODO: x軸のcursorの動きを制限
+
 }
 
 // Normal mode時のキー操作
@@ -224,6 +225,7 @@ func (v *View) NormalCommand(ch gc.Key) {
 	}
 }
 
+//TODO: 文字の入力
 func (v *View) InsertCommand(ch gc.Key) {
 	switch ch {
 	case ESC_KEY:
@@ -244,7 +246,6 @@ func (v *View) VisualCommand(ch gc.Key) error {
 	return nil
 }
 
-// TODO サブウィンドウの追加
 func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) error {
 	win, err := gc.NewWindow(nline, ncolm, begin_y, begin_x)
 	if err != nil {
