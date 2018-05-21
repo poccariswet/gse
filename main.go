@@ -163,10 +163,8 @@ func (v *View) CursorMove(ch gc.Key) {
 			v.cursor.text_x++
 		}
 	case gc.KEY_UP, 'k':
-		if v.cursor.y > 0 {
-			v.cursor.y--
-			v.cursor.text_y--
-		}
+		v.cursor.y--
+		v.cursor.text_y--
 	case gc.KEY_DOWN, 'j', '\n':
 		v.cursor.y++
 		v.cursor.text_y++
@@ -192,6 +190,23 @@ func (v *View) ScrollWin() {
 			v.cursor.text_y = v.file.GetLine()
 		}
 	}
+
+	if v.cursor.y < 0 {
+		v.cursor.y = 0
+		if v.cursor.text_y >= 0 {
+			v.main_window.Scroll(-1)
+			v.colm_window.Scroll(-1)
+			v.colm_window.AttrOn(gc.A_BOLD)
+			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
+			v.colm_window.AttrOff(gc.A_BOLD)
+			v.main_window.Refresh()
+			v.main_window.MovePrint(v.cursor.y, 0, v.file.contents[v.cursor.text_y])
+			v.colm_window.Refresh()
+		} else {
+			v.cursor.text_y = 0
+		}
+	}
+
 }
 
 // Normal mode時のキー操作
