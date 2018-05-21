@@ -19,10 +19,10 @@ type FileInfo struct {
 }
 
 type Cursor struct {
-	x     int
-	y     int
-	max_x int
-	max_y int
+	x      int
+	y      int
+	text_x int
+	text_y int
 }
 
 type Mode int
@@ -145,33 +145,53 @@ func (v *View) Init() error {
 	v.mode_window.Refresh()
 	v.colm_window.Refresh()
 	v.main_window.Move(0, 0) // init locate of cursor
-	v.main_window.Resize(y, x)
 	v.main_window.Refresh()
 
 	return nil
 }
 
-//TODO cursor移動をまとめる
 func (v *View) CursorMove(ch gc.Key) {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
 		if v.cursor.x > 0 {
 			v.cursor.x--
+			v.cursor.text_x--
 		}
 	case gc.KEY_RIGHT, 'l':
 		if v.cursor.x < v.max_x {
 			v.cursor.x++
+			v.cursor.text_x++
 		}
 	case gc.KEY_UP, 'k':
 		if v.cursor.y > 0 {
 			v.cursor.y--
+			v.cursor.text_y--
 		}
 	case gc.KEY_DOWN, 'j', '\n':
-		if v.cursor.y < v.max_y {
-			v.cursor.y++
+		v.cursor.y++
+		v.cursor.text_y++
+	}
+	//TODO ここでmax_yを超えるかつ、max_y以上ある場合一段下の行を表示す
+	v.ScrollWin()
+	v.main_window.Move(v.cursor.y, v.cursor.x)
+}
+
+func (v *View) ScrollWin() {
+	if v.cursor.y > v.max_y {
+		v.cursor.y = v.max_y
+		if v.cursor.text_y < v.file.GetLine() {
+			v.main_window.Scroll(1)
+			v.colm_window.Scroll(1)
+			v.colm_window.AttrOn(gc.A_BOLD)
+			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
+			v.colm_window.AttrOff(gc.A_BOLD)
+			v.main_window.Refresh()
+			v.main_window.MovePrint(v.cursor.y, 0, v.file.contents[v.cursor.text_y])
+			v.colm_window.Refresh()
+		} else {
+			v.cursor.text_y = v.file.GetLine()
 		}
 	}
-	v.main_window.Move(v.cursor.y, v.cursor.x)
 }
 
 // Normal mode時のキー操作
@@ -184,10 +204,8 @@ func (v *View) NormalCommand(ch gc.Key) {
 		close(quit)
 	case 'i':
 		v.mode = Insert
-		v.Mode()
 	case 'v':
 		v.mode = Visual
-		v.Mode()
 	}
 }
 
@@ -195,7 +213,6 @@ func (v *View) InsertCommand(ch gc.Key) {
 	switch ch {
 	case ESC_KEY:
 		v.mode = Normal
-		v.Mode()
 	case gc.KEY_RIGHT, gc.KEY_UP, gc.KEY_DOWN, gc.KEY_LEFT:
 		v.CursorMove(ch)
 	}
@@ -207,7 +224,6 @@ func (v *View) VisualCommand(ch gc.Key) error {
 		v.CursorMove(ch)
 	case ESC_KEY:
 		v.mode = Normal
-		v.Mode()
 	}
 
 	return nil
@@ -236,7 +252,7 @@ func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) er
 func NewView(f *FileInfo) (*View, error) {
 	v := &View{
 		file:   f,
-		cursor: Cursor{x: 0, y: 0},
+		cursor: Cursor{x: 0, y: 0, text_x: 0, text_y: 0},
 		mode:   Normal,
 	}
 
@@ -268,6 +284,8 @@ func (v *View) Mode() {
 	v.mode_window.AttrOff(gc.A_BOLD)
 	v.mode_window.MovePrintf(0, 6, ": %s\n", v.file.name)
 	v.mode_window.Refresh()
+	v.colm_window.Refresh()
+	v.main_window.Refresh()
 }
 
 func main() {
@@ -296,9 +314,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	view.Mode()
 	go func() {
 		for {
+			view.Mode()
 			ch := view.main_window.GetChar()
 			switch view.mode {
 			case Normal:
