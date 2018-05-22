@@ -17,43 +17,65 @@ var (
 )
 
 func (v *View) ScrollWin() {
-	//	if v.cursor.y > v.max_y {
-	//		v.cursor.y = v.max_y
-	//		if v.cursor.text_y < v.file.GetLine() {
-	//			v.main_window.Scroll(1)
-	//			v.colm_window.Scroll(1)
-	//			v.colm_window.AttrOn(gc.A_BOLD)
-	//			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
-	//			v.colm_window.AttrOff(gc.A_BOLD)
-	//			v.main_window.Refresh()
-	//			v.main_window.MovePrint(v.cursor.y, 0, v.file.contents[v.cursor.text_y])
-	//			v.colm_window.Refresh()
-	//		} else {
-	//			v.cursor.text_y = v.file.GetLine()
-	//		}
-	//	}
-	//
-	//	if v.cursor.y < 0 {
-	//		v.cursor.y = 0
-	//		if v.cursor.text_y >= 0 {
-	//			v.main_window.Scroll(-1)
-	//			v.colm_window.Scroll(-1)
-	//			v.colm_window.AttrOn(gc.A_BOLD)
-	//			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
-	//			v.colm_window.AttrOff(gc.A_BOLD)
-	//			v.main_window.Refresh()
-	//			v.main_window.MovePrint(v.cursor.y, 0, v.file.contents[v.cursor.text_y])
-	//			v.colm_window.Refresh()
-	//		} else {
-	//			v.cursor.text_y = 0
-	//		}
-	//	}
+	if v.cursor.y > v.max_y {
+		v.cursor.y = v.max_y
+		if v.cursor.text_y <= v.file.line_num && v.text_line != v.file.line_num {
+			v.main_window.Scroll(1)
+			v.colm_window.Scroll(1)
+			v.colm_window.AttrOn(gc.A_BOLD)
+			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
+			v.colm_window.AttrOff(gc.A_BOLD)
+			v.colm_window.Refresh()
+			count := 0
+			for {
+				if v.max_x == count || v.file.bytes[v.text_pos] == byte(10) {
+					v.main_window.MovePrint(v.cursor.y, count, string(v.file.bytes[v.text_pos]))
+					v.text_pos++
+					break
+				}
+				v.main_window.MovePrint(v.cursor.y, count, string(v.file.bytes[v.text_pos]))
+				v.main_window.Refresh()
+				v.text_pos++
+				count++
+			}
+			v.main_window.Refresh()
+		} else {
+			v.cursor.text_y = v.file.line_num
+		}
+	}
 
-	//TODO: x軸のcursorの動きを制限
+	//TODO: scrol up できない
+	if v.cursor.y < 0 {
+		v.cursor.y = 0
+		if v.cursor.text_y >= 0 {
+			v.main_window.Scroll(-1)
+			v.colm_window.Scroll(-1)
+			v.colm_window.AttrOn(gc.A_BOLD)
+			v.colm_window.MovePrintf(v.cursor.y, 0, "%3d ", v.cursor.text_y+1)
+			v.colm_window.AttrOff(gc.A_BOLD)
+			v.colm_window.Refresh()
+			count := 0
+			for {
+				if v.max_x == count || v.file.bytes[v.text_pos] == byte(10) {
+					v.main_window.MovePrint(v.cursor.y, count, string(v.file.bytes[v.text_pos]))
+					v.text_pos++
+					break
+				}
+				v.main_window.MovePrint(v.cursor.y, count, string(v.file.bytes[v.text_pos]))
+				v.main_window.Refresh()
+				v.text_pos++
+				count++
+			}
+			v.main_window.Refresh()
+		} else {
+			v.cursor.text_y = 0
+		}
+	}
+
+	//TODO: limit of x line
 
 }
 
-// Normal mode時のキー操作
 func (v *View) NormalCommand(ch gc.Key) {
 	switch ch {
 	case gc.KEY_RIGHT, 'l', gc.KEY_UP, 'k', gc.KEY_DOWN, 'j', '\n', gc.KEY_LEFT, 'h', gc.KEY_BACKSPACE:
@@ -74,7 +96,7 @@ func (v *View) Insert(ch string) {
 	}
 }
 
-//TODO: 文字の入力
+//TODO
 func (v *View) InsertCommand(ch gc.Key) {
 	switch ch {
 	case ESC_KEY:
@@ -110,7 +132,7 @@ func main() {
 	gc.StartColor() // start_color
 	defer gc.End()  // endwin
 
-	v, err := NewView() //ここでサブウィンドウの作成
+	v, err := NewView()
 	if err != nil {
 		fmt.Fprint(os.Stderr, err)
 		os.Exit(1)

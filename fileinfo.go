@@ -68,18 +68,12 @@ func (f *FileInfo) Open(filename string) error {
 
 func (f *FileInfo) SetLine() {
 	line := 0
-
 	for _, v := range f.bytes {
 		if string(v) == "\n" {
 			line++
 		}
 	}
-
 	f.line_num = line
-}
-
-func (f *FileInfo) GetLine() int {
-	return f.line_num
 }
 
 func (f *FileInfo) GetName() string {

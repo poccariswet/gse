@@ -22,8 +22,10 @@ func (v *View) CursorMove(ch gc.Key) {
 			v.cursor.text_x++
 		}
 	case gc.KEY_UP, 'k':
-		v.cursor.y--
-		v.cursor.text_y--
+		if v.cursor.y > 0 {
+			v.cursor.y--
+			v.cursor.text_y--
+		}
 	case gc.KEY_DOWN, 'j', '\n':
 		v.cursor.y++
 		v.cursor.text_y++

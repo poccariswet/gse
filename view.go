@@ -24,18 +24,21 @@ type View struct {
 	mode_window *gc.Window
 	max_x       int
 	max_y       int
-	full        int
+	text_pos    int
+	text_line   int
 }
 
 func NewView() (*View, error) {
 	v := &View{
-		file:   &FileInfo{},
-		cursor: Cursor{x: 0, y: 0, text_x: 0, text_y: 0},
-		mode:   Normal,
+		file:      &FileInfo{},
+		cursor:    Cursor{x: 0, y: 0, text_x: 0, text_y: 0},
+		mode:      Normal,
+		text_pos:  0,
+		text_line: 0,
 	}
 
 	stdscr := gc.StdScr()
-	len_str := len(fmt.Sprintf("%d", v.file.GetLine()))
+	len_str := len(fmt.Sprintf("%d", v.file.line_num))
 	if len_str < 4 {
 		len_str = 4
 	}
@@ -86,16 +89,17 @@ func (v *View) Init() error {
 	v.main_window.Keypad(true)
 	v.main_window.ScrollOk(true)
 	v.colm_window.ScrollOk(true)
+	gc.InitPair(1, gc.C_BLACK, gc.C_WHITE)
+	v.mode_window.SetBackground(gc.ColorPair(1))
 	y, x := v.main_window.MaxYX() // ncurses_getmaxyx
-	if y > v.file.GetLine() {
-		y = v.file.GetLine()
+	if y > v.file.line_num {
+		y = v.file.line_num + 1
 	} else {
 		y -= 1
 	}
 
 	v.max_y = y - 1
 	v.max_x = x - 1
-	v.full = v.max_x * v.max_y
 
 	v.Show(v.file.bytes)
 	v.main_window.Move(0, 0) // init locate of cursor
@@ -104,9 +108,8 @@ func (v *View) Init() error {
 	return nil
 }
 
-// windowの設定、ファイルの表示をする
 func (v *View) ShowLine() {
-	for i := 0; i < v.file.GetLine(); i++ {
+	for i := 0; i < v.max_y; i++ {
 		v.colm_window.AttrOn(gc.A_BOLD)
 		v.colm_window.MovePrintf(i, 0, "%3d ", i+1)
 		v.colm_window.AttrOff(gc.A_BOLD)
@@ -115,27 +118,33 @@ func (v *View) ShowLine() {
 }
 
 func (v *View) Show(bytes []byte) {
-	var max_win int
-	count := 0
-	h := 0
-	max_win = v.full
-	if v.full > len(bytes) {
-		max_win = len(bytes)
-	}
+	max_win := len(bytes)
 
 	v.ShowLine()
 
+	count := 0
+	h := 0
 	for i := 0; i < max_win; i++ {
 		if v.max_x == count || bytes[i] == byte(10) {
 			h++
 			count = 0
-			v.main_window.MovePrint(h, count, string(bytes[i]))
+			v.main_window.MovePrint(h, count, string(bytes[v.text_pos]))
 			v.main_window.Refresh()
+			v.text_pos++
+			v.text_line++
+			if v.max_y == v.text_line {
+				break
+			}
 			continue
 		}
-		v.main_window.MovePrint(h, count, string(bytes[i]))
+		v.main_window.MovePrint(h, count, string(bytes[v.text_pos]))
 		v.main_window.Refresh()
 		count++
+		v.text_pos++
 	}
+
+	v.max_y -= 1
+
+	v.colm_window.Refresh()
 	v.main_window.Refresh()
 }
