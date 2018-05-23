@@ -19,7 +19,7 @@ var (
 func (v *View) ScrollWin() {
 	if v.cursor.y > v.max_y {
 		v.cursor.y = v.max_y
-		if v.cursor.text_y <= v.file.line_num && v.text_line != v.file.line_num {
+		if v.cursor.text_y < v.file.line_num && v.text_line != v.file.line_num {
 			v.main_window.Scroll(1)
 			v.colm_window.Scroll(1)
 			v.colm_window.AttrOn(gc.A_BOLD)
