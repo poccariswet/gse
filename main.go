@@ -31,16 +31,19 @@ const (
 	Normal Mode = iota
 	Insert
 	Visual
+	Cmdline
 )
 
 func (m Mode) String() string {
 	switch m {
 	case Normal:
-		return "Normal"
+		return "NORMAL"
 	case Insert:
-		return "Insert"
+		return "INSERT"
 	case Visual:
-		return "Visual"
+		return "VISUAL"
+	case Cmdline:
+		return "NORMAL"
 	default:
 		return "non-match"
 	}
@@ -49,8 +52,9 @@ func (m Mode) String() string {
 type WindowMode int
 
 const (
-	ESC_KEY   gc.Key = 0x1B
-	COLON_KEY gc.Key = 0x3A
+	ESC_KEY    gc.Key = 0x1B
+	COLON_KEY  gc.Key = 0x3A
+	DELETE_KEY gc.Key = 0x7F
 )
 
 const (
@@ -98,7 +102,16 @@ func OpenFile(filename string) (*FileInfo, error) {
 	scanner := bufio.NewScanner(file)
 	var str []string
 	for scanner.Scan() {
-		str = append(str, scanner.Text()+"\n")
+		moji := scanner.Text()
+		text := ""
+		for _, v := range []byte(moji) {
+			if v == byte('\t') {
+				text = "  "
+				continue
+			}
+			text += string(v)
+		}
+		str = append(str, text+"\n")
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, errors.New(fmt.Sprintf("scanner err:", err))
@@ -114,6 +127,15 @@ func OpenFile(filename string) (*FileInfo, error) {
 
 func (f *FileInfo) GetLine() int {
 	return len(f.buf)
+}
+
+func (f *FileInfo) GetCol(y int) int {
+	if len(f.buf[y]) == 1 {
+		return 0
+	} else if len(f.buf[y]) == 0 {
+		return 0
+	}
+	return len(f.buf[y]) - 2
 }
 
 func (f *FileInfo) GetName() string {
@@ -162,15 +184,11 @@ func (v *View) Init() error {
 func (v *View) CursorMove(ch gc.Key) {
 	switch ch {
 	case gc.KEY_LEFT, 'h':
-		if v.cursor.x > 0 {
-			v.cursor.x--
-			v.cursor.text_x--
-		}
+		v.cursor.x--
+		v.cursor.text_x--
 	case gc.KEY_RIGHT, 'l':
-		if v.cursor.x < v.max_x {
-			v.cursor.x++
-			v.cursor.text_x++
-		}
+		v.cursor.x++
+		v.cursor.text_x++
 	case gc.KEY_UP, 'k':
 		v.cursor.y--
 		v.cursor.text_y--
@@ -218,6 +236,16 @@ func (v *View) ScrollWin(scrol bool) {
 	}
 
 	//TODO: x軸のcursorの動きを制限
+	if v.cursor.x < 0 {
+		v.cursor.x = 0
+	}
+
+	if v.cursor.x > v.file.GetCol(v.cursor.y) {
+		v.cursor.x = v.file.GetCol(v.cursor.y)
+		if v.cursor.x < 0 {
+			v.cursor.x = 0
+		}
+	}
 
 }
 
@@ -232,58 +260,81 @@ func (v *View) NormalCommand(ch gc.Key) {
 		v.mode = Insert
 	case 'v':
 		v.mode = Visual
+	case COLON_KEY:
+		v.mode = Cmdline
 	}
 }
 
 func (v *View) refresh() {
-	y, _ := v.main_window.MaxYX() // ncurses_getmaxyx
-	if y > len(v.file.buf) {
-		y = len(v.file.buf)
-	} else {
-		y -= 1
-	}
-
-	for i := 0; i < y; i++ {
+	line := v.cursor.text_y
+	for i := v.cursor.y; i < v.max_y; i++ {
 		v.colm_window.AttrOn(gc.A_BOLD)
 		v.colm_window.Printf("%3d ", i+1)
 		v.colm_window.AttrOff(gc.A_BOLD)
 		v.colm_window.Refresh()
-		v.main_window.Print(v.file.buf[i])
+		v.main_window.Print(v.file.buf[line])
 		v.main_window.Refresh()
+		line++
 	}
 }
 
 func (v *View) insertNewLine() {
-	y, _ := v.main_window.MaxYX() // ncurses_getmaxyx
-	if y > len(v.file.buf) {
-		y = len(v.file.buf)
-	} else {
-		y -= 1
-	}
-
 	str_copy := []byte(v.file.buf[v.cursor.text_y])
-	oline := str_copy[0:v.cursor.text_x]
-	nline := str_copy[v.cursor.text_x:]
+	oline := str_copy[0:v.cursor.x]
+	nline := str_copy[v.cursor.x:]
+	if len(nline) == 0 {
+		nline = []byte(" ")
+	}
 
 	v.file.buf = append(v.file.buf[:v.cursor.text_y+1], v.file.buf[v.cursor.text_y:]...)
 	v.file.buf[v.cursor.text_y] = string(oline)
 	v.file.buf[v.cursor.text_y+1] = string(nline)
+
+	v.ScrollWin(true)
+	//TODO: insertして新しくしたところから下をrefresh
+	v.refresh()
 	v.cursor.text_y++
 	v.cursor.y++
-	v.ScrollWin(true)
 	v.main_window.Move(v.cursor.y, v.cursor.x)
-	v.max_y = y - 1
 }
 
 func (v *View) insert(ch gc.Key) {
-
+	var text string
+	pos := v.cursor.x - 1
+	for i, t := range []byte(v.file.buf[v.cursor.text_y]) {
+		text += string(t)
+		if i == pos {
+			text += string(ch)
+		}
+	}
+	//TODO max_xを超えてしまった時の対処
+	v.file.buf[v.cursor.text_y] = text
+	v.main_window.MovePrint(v.cursor.y, 0, v.file.buf[v.cursor.text_y])
+	v.main_window.Refresh()
+	v.cursor.x++
+	v.main_window.Move(v.cursor.y, v.cursor.x)
+	v.main_window.Refresh()
 }
 
 func (v *View) Insert(ch gc.Key) {
 	if ch == '\n' {
 		v.insertNewLine()
-	} else {
+	} else if len(string(ch)) == 1 {
 		v.insert(ch)
+	}
+}
+
+func (v *View) delete() {
+	if v.cursor.x != 0 {
+		text := []byte(v.file.buf[v.cursor.y])
+		text = append(text[:v.cursor.x-1], text[v.cursor.x:]...)
+		v.file.buf[v.cursor.y] = string(text)
+
+		v.main_window.MovePrint(v.cursor.y, 0, v.file.buf[v.cursor.text_y])
+		v.main_window.Refresh()
+		v.cursor.x--
+		v.main_window.Move(v.cursor.y, v.cursor.x)
+		v.main_window.Refresh()
 	}
 }
 
@@ -294,6 +345,10 @@ func (v *View) InsertCommand(ch gc.Key) {
 		v.mode = Normal
 	case gc.KEY_RIGHT, gc.KEY_UP, gc.KEY_DOWN, gc.KEY_LEFT:
 		v.CursorMove(ch)
+	case DELETE_KEY:
+		v.delete()
+	//何もしないと一定時間ごとに 0 がgetcharからかえる
+	case 0:
 	default:
 		v.Insert(ch)
 	}
@@ -307,6 +362,24 @@ func (v *View) VisualCommand(ch gc.Key) {
 		v.mode = Normal
 	}
 
+}
+
+func (v *View) Save() {
+
+}
+
+func (v *View) cmdinsert() {
+
+}
+
+func (v *View) CmdlineCommand(ch gc.Key) {
+	switch ch {
+	case DELETE_KEY:
+		v.mode = Normal
+		v.cmdinsert()
+	case 'w':
+		v.Save()
+	}
 }
 
 func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) error {
@@ -361,7 +434,7 @@ func (v *View) Mode() {
 	v.mode_window.AttrOn(gc.A_BOLD)
 	v.mode_window.MovePrintf(0, 0, "%s", v.mode)
 	v.mode_window.AttrOff(gc.A_BOLD)
-	v.mode_window.MovePrintf(0, 6, ": %s\n", v.file.name)
+	v.mode_window.MovePrintf(0, 6, ": %s cursor: x.%d y.%d, text_x.%d text_y.%d\n", v.file.name, v.cursor.x, v.cursor.y, v.cursor.text_x, v.cursor.text_y)
 	v.mode_window.Refresh()
 	v.colm_window.Refresh()
 	v.main_window.Refresh()
@@ -404,6 +477,8 @@ func main() {
 				view.InsertCommand(ch)
 			case Visual:
 				view.VisualCommand(ch)
+			case Cmdline:
+				view.CmdlineCommand(ch)
 			default:
 				return
 			}
