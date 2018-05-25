@@ -40,11 +40,10 @@ func OpenFile(filename string) (*FileInfo, error) {
 	scanner := bufio.NewScanner(file)
 	var str []string
 	for scanner.Scan() {
-		moji := scanner.Text()
 		text := ""
-		for _, v := range []byte(moji) {
+		for _, v := range []byte(scanner.Text()) {
 			if v == byte('\t') {
-				text = "  "
+				text += "  "
 				continue
 			}
 			text += string(v)

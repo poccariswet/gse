@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -91,22 +92,28 @@ func (v *View) refresh() {
 	}
 }
 
-func (v *View) Save() {
-
-}
-
-func (v *View) cmdinsert() {
-
-}
-
-func (v *View) CmdlineCommand(ch gc.Key) {
-	switch ch {
-	case DELETE_KEY:
-		v.mode = Normal
-		v.cmdinsert()
-	case 'w':
-		v.Save()
+//TODO: save
+func (v *View) Save() error {
+	v.mode_window.MovePrint(0, 50, "Save!")
+	v.mode_window.Refresh()
+	if err := v.save(); err != nil {
+		return err
 	}
+	return nil
+}
+
+func (v *View) save() error {
+	var bytes []byte
+	for i, _ := range v.file.buf {
+		b := []byte(v.file.buf[i])
+		for _, v := range b {
+			bytes = append(bytes, v)
+		}
+	}
+	if err := ioutil.WriteFile(v.file.namepath, bytes, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (v *View) MakeWindows(wm WindowMode, nline, ncolm, begin_y, begin_x int) error {
@@ -194,8 +201,6 @@ func main() {
 				view.InsertCommand(ch)
 			case Visual:
 				view.VisualCommand(ch)
-			case Cmdline:
-				view.CmdlineCommand(ch)
 			default:
 				return
 			}

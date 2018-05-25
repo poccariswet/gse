@@ -7,13 +7,15 @@ func (v *View) NormalCommand(ch gc.Key) {
 	case gc.KEY_RIGHT, 'l', gc.KEY_UP, 'k', gc.KEY_DOWN, 'j', '\n', gc.KEY_LEFT, 'h', DELETE_KEY:
 		v.CursorMove(ch)
 
+	case CTRS_KEY:
+		v.Save()
+		v.mode_window.Erase()
+
 	case 'q':
 		close(quit)
 	case 'i':
 		v.mode = Insert
 	case 'v':
 		v.mode = Visual
-	case COLON_KEY:
-		v.mode = Cmdline
 	}
 }
