@@ -34,6 +34,7 @@ type View struct {
 	mode_window *gc.Window
 	max_x       int
 	max_y       int
+	state       bool
 }
 
 var (
@@ -49,6 +50,7 @@ func (v *View) Init() error {
 	}
 
 	gc.MouseMask(gc.M_ALL, nil)
+	v.state = false
 	v.main_window.Keypad(true)
 	v.main_window.ScrollOk(true)
 	v.colm_window.ScrollOk(true)
@@ -94,11 +96,11 @@ func (v *View) refresh() {
 
 //TODO: save
 func (v *View) Save() error {
-	v.mode_window.MovePrint(0, 50, "Save!")
 	v.mode_window.Refresh()
 	if err := v.save(); err != nil {
 		return err
 	}
+	v.state = true
 	return nil
 }
 

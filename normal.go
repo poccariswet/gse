@@ -9,12 +9,12 @@ func (v *View) NormalCommand(ch gc.Key) {
 
 	case CTRS_KEY:
 		v.Save()
-		v.mode_window.Erase()
 
 	case 'q':
 		close(quit)
 	case 'i':
 		v.mode = Insert
+		v.state = false
 	case 'v':
 		v.mode = Visual
 	}
