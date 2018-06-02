@@ -5,7 +5,7 @@ import "fmt"
 func main() {
   fmt.Println("aqaa")
   fmt.Println("iiii")
-  fmt.Println("uuuu")
+  fmt.Println("ai ooo ueo")
   fmt.Println("eeee")
   fmt.Println("oooo")
 }

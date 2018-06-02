@@ -36,7 +36,6 @@ func (v *View) insert(ch gc.Key) {
 	} else {
 		text += string(ch)
 	}
-	//TODO max_xを超えてしまった時の対処
 	v.file.buf[v.cursor.text_y] = text
 	v.main_window.MovePrint(v.cursor.y, 0, v.file.buf[v.cursor.text_y])
 	v.main_window.Refresh()
